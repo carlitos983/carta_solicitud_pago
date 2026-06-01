@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Solicitud de pago – Gráfica Silvestre</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #f0f2f5; font-family: -apple-system, 'Segoe UI', Arial, sans-serif; padding: 0 0 60px; }
+.topbar { background: #1a3a5c; color: white; text-align: center; padding: 16px 20px 12px; }
+.topbar h1 { font-size: 1.2rem; font-weight: 700; }
+.topbar p { font-size: 0.78rem; opacity: 0.65; margin-top: 3px; }
+.section { background: white; margin: 14px 12px 0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.section-title { background: #1a3a5c; color: white; padding: 10px 16px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; }
+.section-body { padding: 14px 16px; }
+.row { display: flex; gap: 10px; margin-bottom: 10px; }
+.field { display: flex; flex-direction: column; gap: 5px; flex: 1; margin-bottom: 10px; }
+.field:last-child { margin-bottom: 0; }
+label { font-size: 0.7rem; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+input, textarea { border: 1.5px solid #dde1e7; border-radius: 8px; font-size: 1rem; padding: 11px 12px; font-family: inherit; color: #222; background: #fafbfc; outline: none; width: 100%; }
+input:focus, textarea:focus { border-color: #1a3a5c; background: white; }
+input[readonly] { color: #555; background: #eef1f5; }
+textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
+.hint { font-size: 0.78rem; color: #888; background: #f0f4f8; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; line-height: 1.45; }
+.btn-secondary { border: 1.5px solid #1a3a5c; background: white; color: #1a3a5c; border-radius: 8px; padding: 9px 12px; font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit; width: 100%; margin-top: 6px; }
+.btn-generate { display: block; width: calc(100% - 24px); margin: 16px 12px 0; background: #c0392b; color: white; border: none; border-radius: 12px; padding: 17px; font-size: 1.05rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+@media (max-width: 400px) { .row { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>&#128196; Carta de solicitud de pago</h1>
+  <p>Gráfica Silvestre S.A.C.</p>
+</div>
+
+<div class="section" id="logoSection" style="display:none">
+  <div class="section-body">
+    <p class="hint">Falta membrete. En esta carpeta ejecute:<br><strong>python copiar-logos-desde-acta.py</strong><br>(usa el logos.js del acta de conformidad)</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Destinatario</div>
+  <div class="section-body">
+    <div class="field">
+      <label>Señor / institución</label>
+      <input type="text" id="destinatario" placeholder="Ej. JURADO NACIONAL DE ELECCIONES" />
+    </div>
+    <div class="field">
+      <label>Atención</label>
+      <input type="text" id="atencion" placeholder="Ej. Oficina de Abastecimiento y/o Logística" />
+    </div>
+    <div class="field">
+      <label>Fecha (automática)</label>
+      <input type="text" id="fecha" readonly />
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Documento a cobrar</div>
+  <div class="section-body">
+    <div class="row">
+      <div class="field">
+        <label>N° factura</label>
+        <input type="text" id="factura" placeholder="Ej. E001-202" />
+      </div>
+      <div class="field">
+        <label>N° orden de compra</label>
+        <input type="text" id="ordenCompra" placeholder="Ej. 05146" />
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>N° informe (opcional)</label>
+        <input type="text" id="informe" placeholder="Ej. 01-2026" />
+      </div>
+      <div class="field">
+        <label>N° guía de remisión (opcional)</label>
+        <input type="text" id="guia" placeholder="Ej. EG07" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Concepto / servicio</label>
+      <textarea id="concepto" rows="3" placeholder="Ej. SERVICIO DE IMPRESIONES EN GENERAL (FLYER) EN EL MARCO DE..."></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Documentos adjuntos (lista en el PDF)</div>
+  <div class="section-body">
+    <p class="hint">Un ítem por línea. Se actualiza sola al cambiar factura, O/C, informe o guía.</p>
+    <textarea id="anexos"></textarea>
+    <button type="button" class="btn-secondary" id="btnActualizarAnexos">Actualizar lista desde los datos de arriba</button>
+  </div>
+</div>
+
+<button type="button" class="btn-generate" id="btnGenerar">&#128196; Generar PDF de la carta</button>
+
+<script src="logos.js"></script>
+<script>
+if (typeof IMG_HEADER === 'undefined') { var IMG_HEADER = null; }
+if (typeof IMG_FOOTER === 'undefined') { var IMG_FOOTER = null; }
+
+var EMPRESA = 'GRAFICA SILVESTRE S.A.C.';
+var RUC_EMPRESA = '20611625112';
+var FIRMA_NOMBRE = 'Carlos Silvestre Bermudez';
+var FIRMA_CARGO = 'Gerente General';
+
+function fechaLimaLarga() {
+  var meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  try {
+    var parts = new Intl.DateTimeFormat('es-PE', {
+      day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'America/Lima'
+    }).formatToParts(new Date());
+    var d = parts.find(function(p) { return p.type === 'day'; }).value;
+    var m = parseInt(parts.find(function(p) { return p.type === 'month'; }).value, 10) - 1;
+    var y = parts.find(function(p) { return p.type === 'year'; }).value;
+    return 'Lima, ' + String(d).padStart(2, '0') + ' de ' + meses[m] + ' del ' + y;
+  } catch (e) {
+    var n = new Date();
+    return 'Lima, ' + String(n.getDate()).padStart(2, '0') + ' de ' + meses[n.getMonth()] + ' del ' + n.getFullYear();
+  }
+}
+
+function headerAlturaMm(cw) { return cw * (132 / 595.3); }
+function footerAlturaMm(cw) { return cw * (124 / 595.3); }
+
+function dibujarMembrete(doc, ml, y, cw) {
+  if (IMG_HEADER) {
+    var h = headerAlturaMm(cw);
+    doc.addImage(IMG_HEADER, 'PNG', ml, y, cw, h, undefined, 'SLOW');
+    return y + h + 4;
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text(EMPRESA, ml, y + 6);
+  return y + 14;
+}
+
+function dibujarPie(doc, ml, cw, PH) {
+  if (!IMG_FOOTER) return;
+  var fh = footerAlturaMm(cw);
+  doc.addImage(IMG_FOOTER, 'PNG', ml, PH - fh - 2, cw, fh, undefined, 'SLOW');
+}
+
+function armarAnexosDefault() {
+  var factura = document.getElementById('factura').value.trim();
+  var orden = document.getElementById('ordenCompra').value.trim();
+  var informe = document.getElementById('informe').value.trim();
+  var guia = document.getElementById('guia').value.trim();
+  var lineas = [];
+  if (informe) lineas.push('Informe N\u00b0 ' + informe);
+  if (orden) lineas.push('Orden de compra N\u00b0' + orden);
+  if (guia) lineas.push('Gu\u00eda de remisi\u00f3n N\u00b0' + guia);
+  if (factura) lineas.push('Factura ' + factura);
+  lineas.push('Consulta Validez de la Factura');
+  lineas.push('Carta CCI');
+  return lineas.join('\n');
+}
+
+function actualizarAnexos() {
+  document.getElementById('anexos').value = armarAnexosDefault();
+}
+
+function validar() {
+  if (!document.getElementById('destinatario').value.trim()) {
+    alert('Ingrese el destinatario (Señor / institución).');
+    return false;
+  }
+  if (!document.getElementById('factura').value.trim()) {
+    alert('Ingrese el número de factura.');
+    return false;
+  }
+  if (!document.getElementById('ordenCompra').value.trim()) {
+    alert('Ingrese la orden de compra.');
+    return false;
+  }
+  if (!document.getElementById('concepto').value.trim()) {
+    alert('Ingrese el concepto del servicio.');
+    return false;
+  }
+  if (!IMG_HEADER) {
+    alert('Falta el membrete.\n\nEjecute: python copiar-logos-desde-acta.py');
+    return false;
+  }
+  return true;
+}
+
+function dibujarFirma(doc, W, pieTop) {
+  var sigW = 78;
+  var cx = W / 2;
+  var lineY = pieTop - 30;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.35);
+  doc.line(cx - sigW / 2, lineY, cx + sigW / 2, lineY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text('p. ' + EMPRESA, cx, lineY + 5, { align: 'center' });
+  doc.text(FIRMA_NOMBRE, cx, lineY + 9.5, { align: 'center' });
+  doc.text(FIRMA_CARGO, cx, lineY + 14, { align: 'center' });
+}
+
+function generarPDF() {
+  if (!validar()) return;
+
+  var dest = document.getElementById('destinatario').value.trim().toUpperCase();
+  var atencion = document.getElementById('atencion').value.trim();
+  var factura = document.getElementById('factura').value.trim();
+  var orden = document.getElementById('ordenCompra').value.trim();
+  var concepto = document.getElementById('concepto').value.trim().toUpperCase();
+  var anexosRaw = document.getElementById('anexos').value.trim();
+  var anexos = anexosRaw ? anexosRaw.split(/\r?\n/).filter(function(l) { return l.trim(); }) : [];
+
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  var W = 210, PH = 297, ml = 15, mr = 15, cw = W - ml - mr;
+  var pieTop = PH - footerAlturaMm(cw) - 2;
+  var limiteCuerpo = pieTop - 42;
+
+  function sf(style, size) {
+    doc.setFont('helvetica', style);
+    doc.setFontSize(size);
+    doc.setTextColor(0, 0, 0);
+  }
+
+  var y = dibujarMembrete(doc, ml, 6, cw);
+  y += 2;
+
+  sf('normal', 10);
+  doc.text(fechaLimaLarga(), W - mr, y, { align: 'right' });
+  y += 8;
+
+  sf('bold', 10);
+  doc.text('Se\u00f1or: ' + dest, ml, y);
+  y += 7;
+
+  var filaAt = y;
+  sf('bold', 10);
+  doc.text('ASUNTO:', W - mr, filaAt, { align: 'right' });
+  var anchoAsuntoLbl = doc.getTextWidth('ASUNTO:') + 4;
+  var atencionTxt = 'Atenci\u00f3n: ' + (atencion || '\u2014');
+  var atencionLines = doc.splitTextToSize(atencionTxt, cw - anchoAsuntoLbl);
+  doc.text(atencionLines, ml, filaAt);
+  y += Math.max(6, atencionLines.length * 4.8) + 2;
+
+  sf('bold', 10);
+  var tituloAsunto = 'Carta de solicitud de pago factura N\u00b0 ' + factura;
+  doc.text(tituloAsunto, ml, y);
+  y += 9;
+
+  var cuerpo =
+    'Mediante la presente nos es grato dirigirnos a usted y al mismo tiempo, nosotros ' + EMPRESA +
+    ', identificados con RUC ' + RUC_EMPRESA + ', solicitamos el pago de la factura ' + factura +
+    ', correspondiente a la Orden de compra N\u00b0 ' + orden + ' por el concepto de ' + concepto +
+    ', de tal manera que adjuntamos los siguientes documentos:';
+
+  sf('bold', 9);
+  var cuerpoLines = doc.splitTextToSize(cuerpo, cw);
+  doc.text(cuerpoLines, ml, y, { align: 'justify', maxWidth: cw });
+  y += cuerpoLines.length * 4.15 + 5;
+
+  for (var i = 0; i < anexos.length; i++) {
+    if (y > limiteCuerpo - 12) break;
+    doc.text('\u2022 ' + anexos[i].trim(), ml + 3, y);
+    y += 4.8;
+  }
+  y += 3;
+
+  sf('bold', 9);
+  var cierre = 'Esperando su pronta atenci\u00f3n me despido de ustedes, muchas gracias.';
+  if (y < limiteCuerpo - 8) {
+    doc.text(cierre, ml, y);
+  }
+
+  dibujarFirma(doc, W, pieTop);
+  dibujarPie(doc, ml, cw, PH);
+
+  var slug = dest.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 24);
+  var fname = 'Solicitud_Pago_' + factura.replace(/[^\w-]/g, '') + '_' + slug + '.pdf';
+  doc.save(fname);
+}
+
+function iniciar() {
+  document.getElementById('fecha').value = fechaLimaLarga();
+  document.getElementById('logoSection').style.display = IMG_HEADER ? 'none' : 'block';
+  actualizarAnexos();
+  ['factura', 'ordenCompra', 'informe', 'guia'].forEach(function(id) {
+    document.getElementById(id).addEventListener('change', actualizarAnexos);
+    document.getElementById(id).addEventListener('input', actualizarAnexos);
+  });
+  document.getElementById('btnActualizarAnexos').addEventListener('click', actualizarAnexos);
+  document.getElementById('btnGenerar').addEventListener('click', generarPDF);
+}
+
+iniciar();
+</script>
+</body>
+</html>

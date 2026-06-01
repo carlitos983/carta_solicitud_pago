@@ -1,0 +1,19 @@
+CARTA DE SOLICITUD DE PAGO - Gráfica Silvestre
+==============================================
+
+1. Copiar membrete (una vez):
+   python copiar-logos-desde-acta.py
+   (necesita logos.js en "carta de conformidad")
+
+2. Abrir index.html en Chrome o Edge.
+
+3. Complete destinatario, factura, orden de compra, concepto.
+   La lista de anexos se arma sola; puede editarla.
+
+4. Generar PDF.
+
+Datos fijos de la empresa en el PDF:
+  GRAFICA SILVESTRE S.A.C.  RUC 20611625112
+  Carlos Silvestre Bermudez - Gerente General
+
+Para GitHub Pages: suba index.html y logos.js
